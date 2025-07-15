@@ -1,0 +1,452 @@
+{
+  "createdAt": "2025-06-20T14:45:01.724Z",
+  "updatedAt": "2025-06-27T16:06:24.014Z",
+  "id": "FxNC9MytwEcBvWvV",
+  "name": "Enrich Email",
+  "active": false,
+  "isArchived": true,
+  "nodes": [
+    {
+      "parameters": {
+        "jsCode": "// Get all input items (contacts) from the previous node\nconst inputItems = $input.all();\nconsole.log('Received', inputItems.length, 'input items');\n\n// Email validation regex - must have @ and at least one dot after @\nconst emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n\n// Process each contact and validate email format\nreturn inputItems.map(item => {\n  const contact = item.json;\n  const email = contact.email;\n  \n  console.log('Processing contact:', contact.firstName, contact.lastName, 'Email:', email);\n  \n  // Check if email is valid format:\n  // - Must not be null or undefined\n  // - Must be a string\n  // - Must not be empty or just whitespace\n  // - Must match email regex pattern\n  const isValidFormat = email !== null && \n                       email !== undefined && \n                       typeof email === 'string' && \n                       email.trim() !== '' && \n                       emailRegex.test(email.trim());\n  \n  return {\n    json: {\n      ...contact,\n      email: email || '',\n      isValidFormat: isValidFormat,\n      originalEmail: email,\n      processStatus: 'format_validated',\n      validationReason: !email || email === '' ? 'empty_email' :\n                       email === null ? 'null_email' :\n                       typeof email !== 'string' ? 'non_string_email' :\n                       !emailRegex.test(email.trim()) ? 'invalid_format' :\n                       'valid_format'\n    }\n  };\n});"
+      },
+      "id": "128a0289-3b5f-4b6c-b633-f23426d9d0ac",
+      "name": "Parse and Validate Email Format",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        360,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.isValidFormat }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "ad9053a3-8afd-4727-a0fb-d865ac1eb03c",
+      "name": "Split: Valid vs Invalid Format",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        580,
+        320
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "1",
+              "leftValue": "={{ $json.trustRate }}",
+              "rightValue": 49,
+              "operator": {
+                "type": "number",
+                "operation": "gt"
+              }
+            },
+            {
+              "id": "aa8e11a0-0359-4c36-8d24-f08d2aaeec88",
+              "leftValue": "={{ $json.mxExists }}",
+              "rightValue": "=True",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "or"
+        },
+        "options": {}
+      },
+      "id": "258f9100-66b5-4ac1-94bc-2fae8fd50bfd",
+      "name": "Split: Verified vs Failed",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        -160
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Mock email lookup response\n// In real implementation, this would process the actual API response\nconst contact = $input.first().json;\n\n// Mock lookup results based on name + company\nconst mockLookupResults = {\n  'Michael Chen Google Inc': { found: true, email: 'm.chen@google.com', confidence: 0.85 },\n  'Emily Rodriguez Amazon Web Services': { found: true, email: 'e.rodriguez@amazon.com', confidence: 0.90 },\n  'Jessica Williams Salesforce': { found: true, email: 'j.williams@salesforce.com', confidence: 0.95 },\n  'Amanda Miller Tesla Motors': { found: true, email: 'a.miller@tesla.com', confidence: 0.80 },\n  'Lisa Anderson Adobe Systems': { found: true, email: 'l.anderson@adobe.com', confidence: 0.75 },\n  'Robert Davis Meta Platforms Inc': { found: false, email: null, confidence: 0 } // verification failed\n};\n\nconst lookupKey = `${contact.firstName} ${contact.lastName} ${contact.company}`;\nconst lookupResult = mockLookupResults[lookupKey] || { found: false, email: null, confidence: 0 };\n\nreturn {\n  json: {\n    ...contact,\n    foundEmail: lookupResult.email,\n    lookupSuccess: lookupResult.found,\n    confidence: lookupResult.confidence,\n    processStatus: 'lookup_completed',\n    finalEmail: lookupResult.email || contact.originalEmail || ''\n  }\n};"
+      },
+      "id": "63db58e9-a54f-441f-bfc3-1b1d8923db8f",
+      "name": "Process Lookup Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        -320
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Final processing and categorization\nconst items = $input.all();\n\nconst validEmails = [];\nconst invalidEmails = [];\n\nitems.forEach(item => {\n  const data = item.json;\n  \n  // Determine final category\n  if ((data.verified === true) || (data.lookupSuccess === true && data.confidence > 0.7)) {\n    validEmails.push({\n      ...data,\n      finalCategory: 'valid',\n      finalEmail: data.finalEmail || data.email,\n      source: data.verified ? 'verified' : 'lookup'\n    });\n  } else {\n    invalidEmails.push({\n      ...data,\n      finalCategory: 'invalid',\n      finalEmail: data.finalEmail || data.originalEmail || '',\n      source: data.processStatus || 'unknown'\n    });\n  }\n});\n\nreturn [\n  {\n    json: {\n      validEmails: validEmails,\n      invalidEmails: invalidEmails,\n      summary: {\n        totalProcessed: items.length,\n        validCount: validEmails.length,\n        invalidCount: invalidEmails.length,\n        verifiedCount: validEmails.filter(e => e.source === 'verified').length,\n        lookupSuccessCount: validEmails.filter(e => e.source === 'lookup').length\n      }\n    }\n  }\n];"
+      },
+      "id": "227c88d6-c169-4625-a0a4-cc1d2898650a",
+      "name": "Final Categorization",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1280,
+        20
+      ]
+    },
+    {
+      "parameters": {
+        "email": "={{ $json.email }}"
+      },
+      "type": "n8n-nodes-base.mailcheck",
+      "typeVersion": 1,
+      "position": [
+        840,
+        220
+      ],
+      "id": "992ae2e0-6585-478d-80a2-ca6310d67c84",
+      "name": "Mailcheck",
+      "alwaysOutputData": true,
+      "credentials": {
+        "mailcheckApi": {
+          "id": "0ipdp8dgE7sxn8f6",
+          "name": "Mailcheck account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Domain Model: Domain Lookup Enhancement Workflow\n// Takes existing data and adds domain information when company field exists\n// Input: any data that might have a company field\n// Output: same data enhanced with domain information\n\n// Configuration\nconst TOMBA_CONFIG = {\n  domainSearchUrl: 'https://api.tomba.io/v1/domain-search',\n  headers: {\n    'content-type': 'application/json',\n    'X-Tomba-Key': 'ta_keh9lvy67waoa6eqbibpobfm1nr85ylm6dirx',\n    'X-Tomba-Secret': 'ts_dbd0e719-5c2e-4c4b-8c6f-6bbba25da7a0'\n  }\n};\n\n// Helper Functions\nfunction extractDomainFromEmail(email) {\n  try {\n    const emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n    if (!emailRegex.test(email)) {\n      throw new Error('Invalid email format');\n    }\n    return email.split('@')[1];\n  } catch (error) {\n    throw new Error(`Cannot extract domain from email \"${email}\": ${error.message}`);\n  }\n}\n\nfunction extractCompanyFromDomain(domain) {\n  try {\n    // Remove common TLDs and get the main part\n    const mainPart = domain.replace(/\\.(com|org|net|edu|gov|mil|int|co\\.uk|co\\.jp|de|fr|it|es|ru|cn|in|au|ca|br)$/i, '');\n    \n    // Capitalize first letter\n    return mainPart.charAt(0).toUpperCase() + mainPart.slice(1);\n  } catch (error) {\n    return domain;\n  }\n}\n\nasync function findDomainByCompany(companyName) {\n  try {\n    const params = [\n      `website=${encodeURIComponent(companyName.trim())}`,\n      `department=executive`\n    ].join('&');\n    \n    const url = `${TOMBA_CONFIG.domainSearchUrl}?${params}`;\n\n    const response = await this.helpers.httpRequest({\n      method: 'GET',\n      url: url,\n      headers: TOMBA_CONFIG.headers,\n      json: true,\n      resolveWithFullResponse: true\n    });\n\n    const responseData = response.body?.data;\n    const domains = responseData?.domains || [];\n    const primaryDomain = domains.length > 0 ? domains[0] : null;\n    const organization = responseData?.organization || null;\n\n    return {\n      success: true,\n      primaryDomain: primaryDomain,\n      allDomains: domains,\n      organization: organization,\n      totalDomains: domains.length,\n      statusCode: response.statusCode\n    };\n\n  } catch (error) {\n    return {\n      success: false,\n      primaryDomain: null,\n      allDomains: [],\n      organization: null,\n      totalDomains: 0,\n      error: error.message,\n      errorType: error.name || 'DomainSearchError',\n      statusCode: error.statusCode || null\n    };\n  }\n}\n\n// Main Processing Logic\nasync function processData() {\n  let items = [];\n  let results = [];\n  \n  try {\n    // Input validation\n    const inputData = $input.all();\n    \n    if (!inputData || inputData.length === 0) {\n      throw new Error('No input data received');\n    }\n\n    // Extract items - handle different input structures\n    if (inputData.length > 1) {\n      items = inputData.map(item => item.json);\n    } else if (Array.isArray(inputData[0].json)) {\n      items = inputData[0].json;\n    } else {\n      items = [inputData[0].json];\n    }\n\n    if (!Array.isArray(items) || items.length === 0) {\n      throw new Error('No items found in input data');\n    }\n\n    console.log(`Processing ${items.length} items for domain lookup`);\n\n    // Process each item\n    for (let i = 0; i < items.length; i++) {\n      const item = items[i];\n      \n      // Build base result object (keep all original data)\n      const result = {\n        ...item,\n        processedAt: new Date().toISOString(),\n        itemIndex: i + 1,\n        totalItems: items.length\n      };\n\n      // Debug: Check what fields we have\n      console.log(`Item ${i + 1} debug:`, {\n        hasCompany: !!item.company,\n        companyValue: item.company,\n        hasEmail: !!item.email,\n        emailValue: item.email\n      });\n\n      // Check if item has company field OR email field (to extract company info)\n      if (item.company?.trim()) {\n        console.log(`Item ${i + 1}: Finding domain for company \"${item.company}\"`);\n        \n        try {\n          const domainResult = await findDomainByCompany(item.company);\n          \n          if (domainResult.success && domainResult.primaryDomain) {\n            result.domainStatus = 'domain_found';\n            result.primaryDomain = domainResult.primaryDomain;\n            result.allDomains = domainResult.allDomains;\n            result.organization = domainResult.organization;\n            result.totalDomains = domainResult.totalDomains;\n            result.apiStatusCode = domainResult.statusCode;\n            result.searchMethod = 'company_field';\n            \n            console.log(`Item ${i + 1}: Found domain \"${domainResult.primaryDomain}\" for \"${item.company}\"`);\n          } else if (domainResult.success) {\n            result.domainStatus = 'no_domain_found';\n            result.primaryDomain = null;\n            result.allDomains = [];\n            result.organization = domainResult.organization;\n            result.totalDomains = 0;\n            result.apiStatusCode = domainResult.statusCode;\n            result.searchMethod = 'company_field';\n            \n            console.log(`Item ${i + 1}: No domain found for \"${item.company}\"`);\n          } else {\n            result.domainStatus = 'search_failed';\n            result.primaryDomain = null;\n            result.allDomains = [];\n            result.organization = null;\n            result.totalDomains = 0;\n            result.error = domainResult.error;\n            result.errorType = domainResult.errorType;\n            result.apiStatusCode = domainResult.statusCode;\n            result.searchMethod = 'company_field';\n            \n            console.log(`Item ${i + 1}: Domain search failed for \"${item.company}\": ${domainResult.error}`);\n          }\n        } catch (searchError) {\n          result.domainStatus = 'processing_error';\n          result.primaryDomain = null;\n          result.allDomains = [];\n          result.error = searchError.message;\n          result.errorType = searchError.name || 'ProcessingError';\n          result.searchMethod = 'company_field';\n          \n          console.log(`Item ${i + 1}: Processing error for \"${item.company}\": ${searchError.message}`);\n        }\n      } else if (item.email?.trim()) {\n        // No company field, but has email - try to extract company from domain\n        try {\n          const emailDomain = extractDomainFromEmail(item.email);\n          const guessedCompany = extractCompanyFromDomain(emailDomain);\n          \n          console.log(`Item ${i + 1}: No company field, trying to find company info for domain \"${emailDomain}\" (guessed: \"${guessedCompany}\")`);\n          \n          const domainResult = await findDomainByCompany(guessedCompany);\n          \n          if (domainResult.success && domainResult.primaryDomain) {\n            result.domainStatus = 'domain_found';\n            result.primaryDomain = domainResult.primaryDomain;\n            result.allDomains = domainResult.allDomains;\n            result.organization = domainResult.organization;\n            result.totalDomains = domainResult.totalDomains;\n            result.apiStatusCode = domainResult.statusCode;\n            result.searchMethod = 'extracted_from_email';\n            result.extractedDomain = emailDomain;\n            result.guessedCompany = guessedCompany;\n            \n            console.log(`Item ${i + 1}: Found company info for \"${guessedCompany}\" (from email domain)`);\n          } else if (domainResult.success) {\n            result.domainStatus = 'no_domain_found';\n            result.primaryDomain = emailDomain; // Use the email domain as fallback\n            result.allDomains = [emailDomain];\n            result.organization = domainResult.organization;\n            result.totalDomains = 1;\n            result.apiStatusCode = domainResult.statusCode;\n            result.searchMethod = 'extracted_from_email';\n            result.extractedDomain = emailDomain;\n            result.guessedCompany = guessedCompany;\n            \n            console.log(`Item ${i + 1}: No company info found, using email domain \"${emailDomain}\" as fallback`);\n          } else {\n            result.domainStatus = 'search_failed';\n            result.primaryDomain = emailDomain; // Use the email domain as fallback\n            result.allDomains = [emailDomain];\n            result.organization = null;\n            result.totalDomains = 1;\n            result.error = domainResult.error;\n            result.errorType = domainResult.errorType;\n            result.apiStatusCode = domainResult.statusCode;\n            result.searchMethod = 'extracted_from_email';\n            result.extractedDomain = emailDomain;\n            result.guessedCompany = guessedCompany;\n            \n            console.log(`Item ${i + 1}: Company search failed, using email domain \"${emailDomain}\" as fallback`);\n          }\n        } catch (extractError) {\n          result.domainStatus = 'extraction_error';\n          result.primaryDomain = null;\n          result.allDomains = [];\n          result.error = extractError.message;\n          result.errorType = extractError.name || 'ExtractionError';\n          result.searchMethod = 'extracted_from_email';\n          \n          console.log(`Item ${i + 1}: Failed to extract domain from email: ${extractError.message}`);\n        }\n      } else {\n        // No company field and no email - just pass through the data\n        result.domainStatus = 'no_searchable_fields';\n        console.log(`Item ${i + 1}: No company or email field, passing through unchanged`);\n      }\n\n      results.push({ json: result });\n    }\n\n    const withSearchableFields = results.filter(r => r.json.domainStatus && !['no_searchable_fields'].includes(r.json.domainStatus)).length;\n    const domainsFound = results.filter(r => r.json.domainStatus === 'domain_found').length;\n    const emailExtracted = results.filter(r => r.json.searchMethod === 'extracted_from_email').length;\n    \n    console.log(`Domain lookup complete: ${results.length} items processed`);\n    console.log(`- Items with searchable fields: ${withSearchableFields}`);\n    console.log(`- Domains found: ${domainsFound}`);\n    console.log(`- Company info extracted from email: ${emailExtracted}`);\n    console.log(`- Items passed through unchanged: ${results.length - withSearchableFields}`);\n    \n    return results;\n\n  } catch (error) {\n    console.log('Workflow error occurred:', error.message);\n    \n    return [{\n      json: {\n        domainStatus: 'workflow_error',\n        error: error.message,\n        errorType: error.name || 'UnknownError',\n        processedAt: new Date().toISOString(),\n        totalItemsExpected: items?.length || 0\n      }\n    }];\n  }\n}\n\n// Execute the workflow\nreturn await processData();"
+      },
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        840,
+        420
+      ],
+      "id": "34c9afbe-2e09-4dc2-a114-fa8b6d803538",
+      "name": "Search for domain"
+    },
+    {
+      "parameters": {
+        "content": "Mailcheck returns trustRate=10  when it can't contact the mail server. Some block it. Need to see if there's a better or different check than just mxExists? \n"
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        760,
+        40
+      ],
+      "id": "2ad2b89c-f5d2-45b0-8452-d0be8ac250de",
+      "name": "Sticky Note"
+    },
+    {
+      "parameters": {
+        "content": "## E-Mail verifier\n\n### Input\nJSON Array of the form \n```json\n[\n  {\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane@doe.io\",\n  \"companyName\": \"Acme\",\n  \"domain\": \"acme.com\"\n  }\n]\n```\n\nOutput is the same fields with these added\n```\n\"deliverable\" : bool\n\"isValidFormat\" : bool\n\"updatedFields\": [ field list ]\n\"mxExists\": true,\n\"smtpExists\": false,\n\"isNotSmtpCatchAll\": true,\n\"isNotDisposable\":  true,\n```",
+        "height": 500,
+        "width": 360
+      },
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -100,
+        -260
+      ],
+      "id": "1d6f72ab-ffa7-44bc-8833-07296a6f158f",
+      "name": "Sticky Note1"
+    },
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "firstName"
+            },
+            {
+              "name": "secondName"
+            },
+            {
+              "name": "companyName"
+            },
+            {
+              "name": "email"
+            }
+          ]
+        }
+      },
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        140,
+        320
+      ],
+      "id": "88bdc722-40d7-4510-9204-f802f7826b62",
+      "name": "When Executed by Another Workflow",
+      "notesInFlow": true,
+      "notes": "## E-Mail verifier2\n\n### Input\nJSON Array of the form \n```json\n[\n  {\n  \"firstName\": \"Jane\",\n  \"lastName\": \"Doe\",\n  \"email\": \"jane@doe.io\",\n  \"companyName\": \"Acme\",\n  \"domain\": \"acme.com\"\n  }\n]\n```\n\nOutput is the same fields with these added\n```\n\"deliverable\" : bool\n\"isValidFormat\" : bool\n\"updatedFields\": [ field list ]\n\"mxExists\": true,\n\"smtpExists\": false,\n\"isNotSmtpCatchAll\": true,\n\"isNotDisposable\":  true,\n```"
+    },
+    {
+      "parameters": {},
+      "type": "n8n-nodes-base.merge",
+      "typeVersion": 3.2,
+      "position": [
+        1120,
+        320
+      ],
+      "id": "5d3cc07b-2ac1-424c-9eeb-f5c8a36682fc",
+      "name": "Merge"
+    }
+  ],
+  "connections": {
+    "Parse and Validate Email Format": {
+      "main": [
+        [
+          {
+            "node": "Split: Valid vs Invalid Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split: Valid vs Invalid Format": {
+      "main": [
+        [
+          {
+            "node": "Mailcheck",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Search for domain",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Split: Verified vs Failed": {
+      "main": [
+        [],
+        []
+      ]
+    },
+    "Process Lookup Result": {
+      "main": [
+        []
+      ]
+    },
+    "Mailcheck": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search for domain": {
+      "main": [
+        [
+          {
+            "node": "Merge",
+            "type": "main",
+            "index": 1
+          }
+        ]
+      ]
+    },
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Parse and Validate Email Format",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {
+    "When Executed by Another Workflow": [
+      {
+        "json": {
+          "firstName": "Sarah",
+          "lastName": "Johnson",
+          "company": "Microsoft Corporation",
+          "email": "sarah.johnson@microsoft.com"
+        }
+      },
+      {
+        "json": {
+          "firstName": "Michael",
+          "lastName": "Chen",
+          "company": "Google Inc",
+          "email": "invalid-email-format"
+        }
+      },
+      {
+        "json": {
+          "firstName": "Emily",
+          "lastName": "Rodriguez",
+          "company": "Amazon Web Services",
+          "email": ""
+        }
+      },
+      {
+        "json": {
+          "firstName": "David",
+          "lastName": "Thompson",
+          "company": "Apple Inc",
+          "email": "d.thompson@apple.com"
+        }
+      },
+      {
+        "json": {
+          "firstName": "Jessica",
+          "lastName": "Williams",
+          "company": "Salesforce",
+          "email": null
+        }
+      },
+      {
+        "json": {
+          "firstName": "Robert",
+          "lastName": "Davis",
+          "company": "Meta Platforms Inc",
+          "email": "robert.davis@fakemeta.com"
+        }
+      },
+      {
+        "json": {
+          "firstName": "Amanda",
+          "lastName": "Miller",
+          "company": "Tesla Motors",
+          "email": "amanda@tesla"
+        }
+      },
+      {
+        "json": {
+          "firstName": "Christopher",
+          "lastName": "Wilson",
+          "company": "Netflix Inc",
+          "email": "c.wilson@netflix.com"
+        }
+      },
+      {
+        "json": {
+          "firstName": "Lisa",
+          "lastName": "Anderson",
+          "company": "Adobe Systems",
+          "email": "lisa.anderson@adobe.com"
+        }
+      },
+      {
+        "json": {
+          "firstName": "Kevin",
+          "lastName": "Martinez",
+          "company": "Spotify Technology",
+          "email": "kevin.martinez@spotify.com"
+        }
+      }
+    ]
+  },
+  "versionId": "97431eb9-ffa4-425b-8f29-9d3d948c6fd4",
+  "triggerCount": 0,
+  "shared": [
+    {
+      "createdAt": "2025-06-20T14:45:01.724Z",
+      "updatedAt": "2025-06-20T14:45:01.724Z",
+      "role": "workflow:owner",
+      "workflowId": "FxNC9MytwEcBvWvV",
+      "projectId": "rKJew7g6FK4UIQ0i",
+      "project": {
+        "createdAt": "2025-06-19T03:39:08.393Z",
+        "updatedAt": "2025-06-19T15:35:08.854Z",
+        "id": "rKJew7g6FK4UIQ0i",
+        "name": "Tracy Snell <tjs@databuddies.com>",
+        "type": "personal",
+        "icon": null,
+        "projectRelations": [
+          {
+            "createdAt": "2025-06-19T03:39:08.393Z",
+            "updatedAt": "2025-06-19T03:39:08.393Z",
+            "role": "project:personalOwner",
+            "userId": "220c6c5e-14a8-4e17-9418-2ebaf789fc31",
+            "projectId": "rKJew7g6FK4UIQ0i",
+            "user": {
+              "createdAt": "2025-06-19T03:39:08.393Z",
+              "updatedAt": "2025-07-08T14:00:58.757Z",
+              "id": "220c6c5e-14a8-4e17-9418-2ebaf789fc31",
+              "email": "tjs@databuddies.com",
+              "firstName": "Tracy",
+              "lastName": "Snell",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-06-19T15:35:28.226Z",
+                "personalization_survey_n8n_version": "1.97.1",
+                "automationGoalDevops": [],
+                "companyType": "saas",
+                "role": "it"
+              },
+              "settings": {
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "FxNC9MytwEcBvWvV",
+                "userActivated": true,
+                "userActivatedAt": 1751032834442,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1751983255551
+                }
+              },
+              "role": "global:member",
+              "disabled": false,
+              "mfaEnabled": false,
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": []
+}
