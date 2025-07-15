@@ -55,7 +55,7 @@ Commands:
   l          List workflows from n8n
   u          Pull selected workflow
   p          Push selected workflow  
-  e          Switch environment (if multiple configured)
+  e          Switch environment and branch (if multiple configured)
   b          Show branch information
   r          Refresh workflow list
   q          Quit application
