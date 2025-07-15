@@ -150,7 +150,7 @@ class WorkflowController:
         branch_info = self.app_service.get_branch_info()
         self.screen.status_display.update_status(branch_info)
     
-    async def handle_button_press(self, event: Button.Pressed) -> None:
+    async def handle_button_press(self, event) -> None:
         """Handle button press events."""
         button_id = event.button.id
         

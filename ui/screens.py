@@ -10,6 +10,7 @@ from textual.screen import Screen, ModalScreen
 from textual.widgets import DataTable, Input
 
 from .components import WorkflowTable, StatusDisplay, EnvironmentDisplay
+from .custom_button import CustomButton
 
 
 class HelpScreen(ModalScreen):
@@ -111,11 +112,11 @@ class WorkflowScreen(Screen):
                 id="scrollable-content"
             ),
             Horizontal(
-                Button("List", id="btn-list", variant="primary"),
-                Button("Pull", id="btn-pull", variant="success"),
-                Button("Push", id="btn-push", variant="warning"),
-                Button("Switch Env", id="btn-env", disabled=not self.can_switch_environments),
-                Button("Switch Branch", id="btn-branch"),
+                CustomButton("List", id="btn-list", classes="primary"),
+                CustomButton("Pull", id="btn-pull", classes="success"),
+                CustomButton("Push", id="btn-push", classes="warning"),
+                CustomButton("Switch Env", id="btn-env", disabled=not self.can_switch_environments),
+                CustomButton("Switch Branch", id="btn-branch"),
                 id="button-container"
             ),
             id="app-container"
@@ -226,5 +227,10 @@ class WorkflowScreen(Screen):
     
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses - implementation delegated to controller."""
+        if self.controller:
+            await self.controller.handle_button_press(event)
+    
+    async def on_custom_button_pressed(self, event: CustomButton.Pressed) -> None:
+        """Handle custom button presses."""
         if self.controller:
             await self.controller.handle_button_press(event)

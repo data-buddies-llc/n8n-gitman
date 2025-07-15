@@ -81,6 +81,58 @@ class N8NWorkflowManager(App):
     
     Button {
         margin: 0 1;
+        min-width: 16;
+        padding: 0 2;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+    }
+    
+    /* Custom Button Styles */
+    CustomButton {
+        margin: 0 1;
+        min-width: 16;
+        padding: 0 2;
+        height: 3;
+        content-align: center middle;
+        text-align: center;
+        border: solid $accent;
+        background: $surface;
+        color: $text;
+    }
+    
+    CustomButton:focus {
+        text-style: bold;
+        border: solid $primary;
+        background: $primary-lighten-1;
+    }
+    
+    CustomButton:hover {
+        background: $primary-darken-1;
+    }
+    
+    CustomButton.primary {
+        background: $primary;
+        color: $text;
+        border: solid $primary;
+    }
+    
+    CustomButton.success {
+        background: $success;
+        color: $text;
+        border: solid $success;
+    }
+    
+    CustomButton.warning {
+        background: $warning;
+        color: $text;
+        border: solid $warning;
+    }
+    
+    CustomButton.disabled {
+        background: $surface-lighten-1;
+        color: $text-muted;
+        border: solid $surface-lighten-1;
     }
     
     /* Help Screen Styles */
