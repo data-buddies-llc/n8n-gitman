@@ -1,0 +1,230 @@
+
+{
+  "createdAt": "2025-07-14T00:47:10.354Z",
+  "updatedAt": "2025-07-14T14:37:20.289Z",
+  "id": "IVP3vFdWulYiMA49",
+  "name": "Enhanced Email Enrichment (Domain-Driven)",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {
+        "workflowInputs": {
+          "values": [
+            {
+              "name": "contacts",
+              "type": "array"
+            },
+            {
+              "name": "enrichmentLevel"
+            },
+            {
+              "name": "timeoutSeconds",
+              "type": "number"
+            }
+          ]
+        }
+      },
+      "id": "trigger",
+      "name": "When Executed by Another Workflow",
+      "type": "n8n-nodes-base.executeWorkflowTrigger",
+      "position": [
+        -220,
+        300
+      ],
+      "typeVersion": 1.1
+    },
+    {
+      "parameters": {
+        "jsCode": "// Domain Service: Contact Validation\nclass ContactValidationService {\n  constructor() {\n    this.emailRegex = /^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$/;\n  }\n\n  validateContacts(contacts) {\n    if (!Array.isArray(contacts)) {\n      throw new Error('Contacts must be an array');\n    }\n\n    return contacts.map((contact, index) => {\n      const validation = this.validateSingleContact(contact, index);\n      return {\n        ...contact,\n        validation,\n        processingId: this.generateProcessingId(),\n        processedAt: new Date().toISOString()\n      };\n    });\n  }\n\n  validateSingleContact(contact, index) {\n    const errors = [];\n    const warnings = [];\n    \n    // Required field validation\n    if (!contact.firstName?.trim()) {\n      errors.push('firstName is required');\n    }\n    if (!contact.lastName?.trim()) {\n      errors.push('lastName is required');\n    }\n    \n    // Email format validation\n    const email = contact.email?.trim();\n    const hasValidEmail = email && this.emailRegex.test(email);\n    const hasCompany = contact.company?.trim();\n    \n    if (!hasValidEmail && !hasCompany) {\n      errors.push('Either valid email or company name is required for enrichment');\n    }\n    \n    if (email && !hasValidEmail) {\n      warnings.push('Email format appears invalid');\n    }\n    \n    // Business logic validation\n    const canEnrich = hasValidEmail || hasCompany;\n    const enrichmentStrategy = this.determineStrategy(hasValidEmail, hasCompany);\n    \n    return {\n      isValid: errors.length === 0,\n      canEnrich,\n      enrichmentStrategy,\n      errors,\n      warnings,\n      contactIndex: index,\n      fields: {\n        hasEmail: !!email,\n        hasValidEmail,\n        hasCompany: !!hasCompany,\n        firstName: !!contact.firstName?.trim(),\n        lastName: !!contact.lastName?.trim()\n      }\n    };\n  }\n\n  determineStrategy(hasValidEmail, hasCompany) {\n    if (hasValidEmail && hasCompany) return 'VERIFY_AND_DISCOVER';\n    if (hasValidEmail) return 'VERIFY_ONLY';\n    if (hasCompany) return 'DISCOVER_ONLY';\n    return 'NO_ENRICHMENT';\n  }\n\n  generateProcessingId() {\n    return `proc_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;\n  }\n}\n\n// Execute validation\ntry {\n  const service = new ContactValidationService();\n  const inputData = $input.first().json;\n  \n  let contacts = [];\n  if (inputData.contacts) {\n    contacts = inputData.contacts;\n  } else {\n    // Handle direct contact input\n    contacts = [$input.first().json];\n  }\n  \n  console.log(`Processing ${contacts.length} contacts for validation`);\n  const validatedContacts = service.validateContacts(contacts);\n  \n  const summary = {\n    total: validatedContacts.length,\n    valid: validatedContacts.filter(c => c.validation.isValid).length,\n    canEnrich: validatedContacts.filter(c => c.validation.canEnrich).length,\n    strategies: {}\n  };\n  \n  validatedContacts.forEach(c => {\n    const strategy = c.validation.enrichmentStrategy;\n    summary.strategies[strategy] = (summary.strategies[strategy] || 0) + 1;\n  });\n  \n  console.log('Validation Summary:', summary);\n  \n  return validatedContacts.map(contact => ({ json: contact }));\n  \n} catch (error) {\n  console.error('Validation failed:', error);\n  return [{\n    json: {\n      error: true,\n      errorType: 'VALIDATION_ERROR',\n      message: error.message,\n      timestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "inputValidation",
+      "name": "Contact Validation Service",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        -20,
+        300
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Domain Service: Email Verification\nclass EmailVerificationService {\n  constructor() {\n    this.timeoutMs = 10000;\n  }\n\n  async verifyEmail(contact) {\n    const email = contact.email?.trim();\n    if (!email) {\n      return this.createVerificationResult(contact, 'NO_EMAIL', null);\n    }\n\n    try {\n      const verificationResult = await this.simulateMailcheckAPI(email);\n      return this.createVerificationResult(contact, 'VERIFIED', verificationResult);\n      \n    } catch (error) {\n      console.warn(`Email verification failed for ${email}: ${error.message}`);\n      return this.createVerificationResult(contact, 'VERIFICATION_FAILED', null, error);\n    }\n  }\n\n  async simulateMailcheckAPI(email) {\n    const domain = email.split('@')[1];\n    const commonDomains = ['gmail.com', 'outlook.com', 'yahoo.com', 'microsoft.com', 'google.com', 'apple.com', 'netflix.com', 'adobe.com', 'spotify.com', 'salesforce.com', 'tesla.com'];\n    \n    if (email.includes('invalid') || email.includes('fake')) {\n      return {\n        deliverable: false,\n        trustRate: 5,\n        mxExists: false,\n        smtpExists: false,\n        reason: 'Invalid email format or suspicious patterns'\n      };\n    }\n    \n    if (commonDomains.includes(domain)) {\n      return {\n        deliverable: true,\n        trustRate: 85,\n        mxExists: true,\n        smtpExists: true,\n        reason: 'Common domain with good reputation'\n      };\n    }\n    \n    return {\n      deliverable: true,\n      trustRate: 70,\n      mxExists: true,\n      smtpExists: false,\n      reason: 'Domain exists but SMTP check inconclusive'\n    };\n  }\n\n  createVerificationResult(contact, status, apiResult, error = null) {\n    const result = {\n      ...contact,\n      emailVerification: {\n        status,\n        verifiedAt: new Date().toISOString(),\n        originalEmail: contact.email,\n        error: error?.message || null\n      }\n    };\n\n    if (apiResult) {\n      result.emailVerification = {\n        ...result.emailVerification,\n        deliverable: apiResult.deliverable,\n        trustRate: apiResult.trustRate,\n        mxExists: apiResult.mxExists,\n        smtpExists: apiResult.smtpExists,\n        verificationReason: apiResult.reason,\n        isHighConfidence: apiResult.trustRate > 70 && apiResult.mxExists\n      };\n    }\n\n    return result;\n  }\n}\n\ntry {\n  const service = new EmailVerificationService();\n  const allContacts = $input.all().map(item => item.json);\n  \n  console.log(`Email verification processing ${allContacts.length} contacts`);\n  \n  const results = [];\n  for (const contact of allContacts) {\n    console.log(`Verifying email for ${contact.processingId}`);\n    const result = await service.verifyEmail(contact);\n    results.push(result);\n  }\n  \n  console.log(`Email verification completed for ${results.length} contacts`);\n  return results.map(contact => ({ json: contact }));\n  \n} catch (error) {\n  console.error('Email verification service error:', error);\n  return $input.all().map(item => ({\n    json: {\n      ...item.json,\n      emailVerification: {\n        status: 'SERVICE_ERROR',\n        error: error.message,\n        verifiedAt: new Date().toISOString()\n      }\n    }\n  }));\n}"
+      },
+      "id": "emailVerification",
+      "name": "Email Verification Service",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        600,
+        200
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Domain Service: Domain Discovery\nclass DomainDiscoveryService {\n  constructor() {\n    this.timeoutMs = 15000;\n    this.maxRetries = 2;\n  }\n\n  async discoverDomain(contact) {\n    const company = contact.company?.trim();\n    if (!company) {\n      return this.createDiscoveryResult(contact, 'NO_COMPANY', null);\n    }\n\n    try {\n      const discoveryResult = await this.searchCompanyDomain(company, contact);\n      return this.createDiscoveryResult(contact, 'DISCOVERED', discoveryResult);\n      \n    } catch (error) {\n      console.warn(`Domain discovery failed for ${company}: ${error.message}`);\n      return this.createDiscoveryResult(contact, 'DISCOVERY_FAILED', null, error);\n    }\n  }\n\n  async searchCompanyDomain(company, contact) {\n    const normalizedCompany = this.normalizeCompanyName(company);\n    \n    const domainMappings = {\n      'microsoft': { domain: 'microsoft.com', confidence: 95 },\n      'google': { domain: 'google.com', confidence: 95 },\n      'amazon': { domain: 'amazon.com', confidence: 95 },\n      'apple': { domain: 'apple.com', confidence: 95 },\n      'salesforce': { domain: 'salesforce.com', confidence: 90 },\n      'meta': { domain: 'meta.com', confidence: 85 },\n      'tesla': { domain: 'tesla.com', confidence: 90 },\n      'netflix': { domain: 'netflix.com', confidence: 85 },\n      'adobe': { domain: 'adobe.com', confidence: 90 },\n      'spotify': { domain: 'spotify.com', confidence: 85 }\n    };\n\n    const mapping = domainMappings[normalizedCompany];\n    if (!mapping) {\n      throw new Error(`No domain found for company: ${company}`);\n    }\n\n    let suggestedEmail = null;\n    if (contact.firstName && contact.lastName) {\n      const firstName = contact.firstName.toLowerCase();\n      const lastName = contact.lastName.toLowerCase();\n      suggestedEmail = `${firstName}.${lastName}@${mapping.domain}`;\n    }\n\n    return {\n      primaryDomain: mapping.domain,\n      confidence: mapping.confidence,\n      suggestedEmail,\n      searchMethod: 'company_lookup',\n      organization: {\n        name: company,\n        normalizedName: normalizedCompany,\n        domain: mapping.domain\n      }\n    };\n  }\n\n  normalizeCompanyName(company) {\n    return company\n      .toLowerCase()\n      .replace(/\\b(corporation|corp|inc|llc|ltd|company|co|group)\\b/g, '')\n      .replace(/[^a-z0-9\\s]/g, '')\n      .trim()\n      .split(' ')[0];\n  }\n\n  createDiscoveryResult(contact, status, apiResult, error = null) {\n    const result = {\n      ...contact,\n      domainDiscovery: {\n        status,\n        discoveredAt: new Date().toISOString(),\n        searchedCompany: contact.company,\n        error: error?.message || null\n      }\n    };\n\n    if (apiResult) {\n      result.domainDiscovery = {\n        ...result.domainDiscovery,\n        primaryDomain: apiResult.primaryDomain,\n        confidence: apiResult.confidence,\n        suggestedEmail: apiResult.suggestedEmail,\n        searchMethod: apiResult.searchMethod,\n        organization: apiResult.organization,\n        isHighConfidence: apiResult.confidence > 80\n      };\n    }\n\n    return result;\n  }\n}\n\ntry {\n  const service = new DomainDiscoveryService();\n  const allContacts = $input.all().map(item => item.json);\n  \n  console.log(`Domain discovery processing ${allContacts.length} contacts`);\n  \n  const results = [];\n  for (const contact of allContacts) {\n    console.log(`Discovering domain for ${contact.processingId}`);\n    const result = await service.discoverDomain(contact);\n    results.push(result);\n  }\n  \n  console.log(`Domain discovery completed for ${results.length} contacts`);\n  return results.map(contact => ({ json: contact }));\n  \n} catch (error) {\n  console.error('Domain discovery service error:', error);\n  return $input.all().map(item => ({\n    json: {\n      ...item.json,\n      domainDiscovery: {\n        status: 'SERVICE_ERROR',\n        error: error.message,\n        discoveredAt: new Date().toISOString()\n      }\n    }\n  }));\n}"
+      },
+      "id": "domainDiscovery",
+      "name": "Domain Discovery Service",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        600,
+        400
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Domain Service: Enrichment Orchestrator\nclass EnrichmentOrchestrator {\n  constructor() {\n    this.qualityThresholds = {\n      email: {\n        minTrustRate: 50,\n        requireMxExists: true\n      },\n      domain: {\n        minConfidence: 70\n      }\n    };\n  }\n\n  orchestrateEnrichment(contacts) {\n    console.log(`Orchestrating enrichment for ${contacts.length} contacts`);\n    \n    return contacts.map(contact => {\n      const enrichmentResult = {\n        ...contact,\n        enrichment: {\n          processedAt: new Date().toISOString(),\n          processingId: contact.processingId,\n          strategy: contact.validation.enrichmentStrategy,\n          qualityScore: 0,\n          confidence: 'LOW',\n          finalEmail: null,\n          finalDomain: null,\n          enrichmentSource: null,\n          businessDecision: null,\n          auditTrail: []\n        }\n      };\n\n      this.processEmailVerification(enrichmentResult);\n      this.processDomainDiscovery(enrichmentResult);\n      this.applyBusinessRules(enrichmentResult);\n      this.calculateQualityScore(enrichmentResult);\n      \n      return enrichmentResult;\n    });\n  }\n\n  processEmailVerification(result) {\n    const verification = result.emailVerification;\n    if (!verification) return;\n\n    result.enrichment.auditTrail.push({\n      step: 'email_verification',\n      status: verification.status,\n      timestamp: verification.verifiedAt\n    });\n\n    if (verification.status === 'VERIFIED' && verification.deliverable) {\n      const meetsThreshold = verification.trustRate >= this.qualityThresholds.email.minTrustRate &&\n                           (!this.qualityThresholds.email.requireMxExists || verification.mxExists);\n      \n      if (meetsThreshold) {\n        result.enrichment.finalEmail = result.email;\n        result.enrichment.enrichmentSource = 'original_verified';\n        result.enrichment.auditTrail.push({\n          step: 'email_quality_check',\n          result: 'passed',\n          trustRate: verification.trustRate,\n          timestamp: new Date().toISOString()\n        });\n      }\n    }\n  }\n\n  processDomainDiscovery(result) {\n    const discovery = result.domainDiscovery;\n    if (!discovery) return;\n\n    result.enrichment.auditTrail.push({\n      step: 'domain_discovery',\n      status: discovery.status,\n      timestamp: discovery.discoveredAt\n    });\n\n    if (discovery.status === 'DISCOVERED' && discovery.isHighConfidence) {\n      result.enrichment.finalDomain = discovery.primaryDomain;\n      \n      if (!result.enrichment.finalEmail && discovery.suggestedEmail) {\n        result.enrichment.finalEmail = discovery.suggestedEmail;\n        result.enrichment.enrichmentSource = 'domain_suggested';\n        result.enrichment.auditTrail.push({\n          step: 'email_suggestion',\n          suggestedEmail: discovery.suggestedEmail,\n          confidence: discovery.confidence,\n          timestamp: new Date().toISOString()\n        });\n      }\n    }\n  }\n\n  applyBusinessRules(result) {\n    const hasVerifiedEmail = result.enrichment.enrichmentSource === 'original_verified';\n    const hasSuggestedEmail = result.enrichment.enrichmentSource === 'domain_suggested';\n    const hasDomain = !!result.enrichment.finalDomain;\n\n    if (hasVerifiedEmail && hasDomain) {\n      result.enrichment.businessDecision = 'FULLY_ENRICHED';\n      result.enrichment.confidence = 'HIGH';\n    } else if (hasVerifiedEmail) {\n      result.enrichment.businessDecision = 'EMAIL_VERIFIED';\n      result.enrichment.confidence = 'MEDIUM';\n    } else if (hasSuggestedEmail && hasDomain) {\n      result.enrichment.businessDecision = 'EMAIL_SUGGESTED';\n      result.enrichment.confidence = 'MEDIUM';\n    } else if (hasDomain) {\n      result.enrichment.businessDecision = 'DOMAIN_ONLY';\n      result.enrichment.confidence = 'LOW';\n    } else {\n      result.enrichment.businessDecision = 'NO_ENRICHMENT';\n      result.enrichment.confidence = 'NONE';\n    }\n\n    result.enrichment.auditTrail.push({\n      step: 'business_decision',\n      decision: result.enrichment.businessDecision,\n      confidence: result.enrichment.confidence,\n      timestamp: new Date().toISOString()\n    });\n  }\n\n  calculateQualityScore(result) {\n    let score = 0;\n\n    const verification = result.emailVerification;\n    if (verification?.status === 'VERIFIED' && verification.deliverable) {\n      score += Math.min(40, verification.trustRate * 0.4);\n    }\n\n    const discovery = result.domainDiscovery;\n    if (discovery?.status === 'DISCOVERED') {\n      score += Math.min(30, discovery.confidence * 0.3);\n    }\n\n    let completeness = 0;\n    if (result.firstName) completeness += 7.5;\n    if (result.lastName) completeness += 7.5;\n    if (result.company) completeness += 7.5;\n    if (result.enrichment.finalEmail) completeness += 7.5;\n    score += completeness;\n\n    result.enrichment.qualityScore = Math.round(score);\n    \n    result.enrichment.auditTrail.push({\n      step: 'quality_scoring',\n      score: result.enrichment.qualityScore,\n      timestamp: new Date().toISOString()\n    });\n  }\n}\n\ntry {\n  const orchestrator = new EnrichmentOrchestrator();\n  const allContacts = $input.all().map(item => item.json);\n  \n  const enrichedContacts = orchestrator.orchestrateEnrichment(allContacts);\n  \n  console.log(`Enrichment orchestration completed for ${enrichedContacts.length} contacts`);\n  \n  return enrichedContacts.map(contact => ({ json: contact }));\n  \n} catch (error) {\n  console.error('Enrichment orchestration error:', error);\n  return [{\n    json: {\n      error: true,\n      errorType: 'ORCHESTRATION_ERROR',\n      message: error.message,\n      timestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "enrichmentOrchestrator",
+      "name": "Enrichment Orchestrator",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        800,
+        300
+      ],
+      "typeVersion": 2
+    },
+    {
+      "parameters": {
+        "jsCode": "// Domain Service: Result Categorization\nclass ResultCategorizationService {\n  categorizeResults(contacts) {\n    const categories = {\n      fullyEnriched: [],\n      emailVerified: [], \n      emailSuggested: [],\n      domainOnly: [],\n      noEnrichment: [],\n      errors: []\n    };\n\n    const summary = {\n      totalProcessed: contacts.length,\n      successRate: 0,\n      averageQualityScore: 0,\n      processingTime: new Date().toISOString()\n    };\n\n    contacts.forEach(contact => {\n      if (contact.error || contact.enrichment?.status?.includes('ERROR')) {\n        categories.errors.push(contact);\n        return;\n      }\n\n      const decision = contact.enrichment?.businessDecision;\n      \n      switch (decision) {\n        case 'FULLY_ENRICHED':\n          categories.fullyEnriched.push(contact);\n          break;\n        case 'EMAIL_VERIFIED':\n          categories.emailVerified.push(contact);\n          break;\n        case 'EMAIL_SUGGESTED':\n          categories.emailSuggested.push(contact);\n          break;\n        case 'DOMAIN_ONLY':\n          categories.domainOnly.push(contact);\n          break;\n        default:\n          categories.noEnrichment.push(contact);\n      }\n    });\n\n    const successfulEnrichments = categories.fullyEnriched.length + \n                                 categories.emailVerified.length + \n                                 categories.emailSuggested.length;\n    \n    summary.successRate = contacts.length > 0 ? \n      Math.round((successfulEnrichments / contacts.length) * 100) : 0;\n\n    const qualityScores = contacts\n      .filter(c => c.enrichment?.qualityScore)\n      .map(c => c.enrichment.qualityScore);\n    \n    summary.averageQualityScore = qualityScores.length > 0 ?\n      Math.round(qualityScores.reduce((a, b) => a + b, 0) / qualityScores.length) : 0;\n\n    summary.categoryCounts = {\n      fullyEnriched: categories.fullyEnriched.length,\n      emailVerified: categories.emailVerified.length,\n      emailSuggested: categories.emailSuggested.length,\n      domainOnly: categories.domainOnly.length,\n      noEnrichment: categories.noEnrichment.length,\n      errors: categories.errors.length\n    };\n\n    return {\n      categories,\n      summary,\n      processedAt: new Date().toISOString()\n    };\n  }\n}\n\ntry {\n  const service = new ResultCategorizationService();\n  const contacts = $input.all().map(item => item.json);\n  \n  console.log(`Categorizing results for ${contacts.length} contacts`);\n  const result = service.categorizeResults(contacts);\n  \n  console.log('Result categorization completed:', result.summary);\n  \n  return [{\n    json: {\n      enrichmentResults: result,\n      allContacts: contacts\n    }\n  }];\n  \n} catch (error) {\n  console.error('Result categorization error:', error);\n  return [{\n    json: {\n      error: true,\n      errorType: 'CATEGORIZATION_ERROR',\n      message: error.message,\n      timestamp: new Date().toISOString()\n    }\n  }];\n}"
+      },
+      "id": "resultCategorization",
+      "name": "Result Categorization Service",
+      "type": "n8n-nodes-base.code",
+      "position": [
+        1000,
+        300
+      ],
+      "typeVersion": 2
+    }
+  ],
+  "connections": {
+    "When Executed by Another Workflow": {
+      "main": [
+        [
+          {
+            "node": "Contact Validation Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Verification Service": {
+      "main": [
+        [
+          {
+            "node": "Enrichment Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Domain Discovery Service": {
+      "main": [
+        [
+          {
+            "node": "Enrichment Orchestrator",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrichment Orchestrator": {
+      "main": [
+        [
+          {
+            "node": "Result Categorization Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Contact Validation Service": {
+      "main": [
+        [
+          {
+            "node": "Email Verification Service",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Domain Discovery Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "96d1086e-6333-4ada-b285-47940289040a",
+  "triggerCount": 0,
+  "shared": [
+    {
+      "createdAt": "2025-07-14T00:47:10.354Z",
+      "updatedAt": "2025-07-14T00:47:10.354Z",
+      "role": "workflow:owner",
+      "workflowId": "IVP3vFdWulYiMA49",
+      "projectId": "DwcYimuvVAZq04MP",
+      "project": {
+        "createdAt": "2025-06-19T02:37:32.469Z",
+        "updatedAt": "2025-06-19T02:40:03.362Z",
+        "id": "DwcYimuvVAZq04MP",
+        "name": "developer developer <developer@databuddies.com>",
+        "type": "personal",
+        "icon": null,
+        "projectRelations": [
+          {
+            "createdAt": "2025-06-19T02:37:32.469Z",
+            "updatedAt": "2025-06-19T02:37:32.469Z",
+            "role": "project:personalOwner",
+            "userId": "32f908fc-d287-45e4-a197-411108560eff",
+            "projectId": "DwcYimuvVAZq04MP",
+            "user": {
+              "createdAt": "2025-06-19T02:37:31.495Z",
+              "updatedAt": "2025-06-19T18:17:45.413Z",
+              "id": "32f908fc-d287-45e4-a197-411108560eff",
+              "email": "developer@databuddies.com",
+              "firstName": "developer",
+              "lastName": "developer",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-06-19T02:40:23.701Z",
+                "personalization_survey_n8n_version": "1.97.1",
+                "automationGoalDevops": [],
+                "companySize": "<20",
+                "companyType": "saas",
+                "role": "it",
+                "reportedSource": "google"
+              },
+              "settings": {
+                "userActivated": false,
+                "easyAIWorkflowOnboarded": true
+              },
+              "role": "global:owner",
+              "disabled": false,
+              "mfaEnabled": false,
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": []
+}

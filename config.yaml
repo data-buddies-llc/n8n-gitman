@@ -1,0 +1,44 @@
+# n8n Workflow Git Manager Configuration
+
+# Default environment when not specified
+default_environment: dev
+
+# Default workflow directory for new workflows
+default_workflow_dir: workflows/devops
+
+# Git settings
+git:
+  auto_commit: true
+  commit_author: "n8n Workflow Manager"
+  commit_email: "n8n@example.com"
+
+# UI settings
+ui:
+  theme: dark
+  refresh_interval: 5  # seconds
+  max_workflows_display: 100
+  
+# Logging settings
+logging:
+  level: INFO
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: logs/app.log
+  max_size: 10485760  # 10MB
+  backup_count: 5
+
+# Backup settings
+backup:
+  enabled: true
+  directory: workflows/backups
+  retention_days: 30
+
+# API settings
+api:
+  timeout: 30  # seconds
+  retry_attempts: 3
+  retry_backoff: 2.0
+
+# Workflow categories
+categories:
+  - biz
+  - devops

@@ -1,0 +1,175 @@
+{
+  "createdAt": "2025-07-10T15:14:55.799Z",
+  "updatedAt": "2025-07-11T13:09:45.258Z",
+  "id": "g9aalr0NL5mC7TO7",
+  "name": "Export Workflow to Disk",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "manual",
+      "name": "Manual",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "get",
+        "workflowId": "lI7npzveyxF97337",
+        "requestOptions": {}
+      },
+      "id": "get-workflow",
+      "name": "Get Workflow",
+      "type": "n8n-nodes-base.n8n",
+      "typeVersion": 1,
+      "position": [
+        470,
+        300
+      ],
+      "credentials": {
+        "n8nApi": {
+          "id": "h8HMknFpq7T6zjpC",
+          "name": "n8n account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const workflow = $input.item.json;\nconst jsonContent = JSON.stringify(workflow, null, 2);\nconst safeName = workflow.name.replace(/[^a-z0-9]/gi, '_').toLowerCase();\n\nreturn {\n  id: workflow.id,\n  name: workflow.name,\n  jsonContent: jsonContent,\n  filePath: `/home/node/.n8n/workflows/${safeName}.json`\n};"
+      },
+      "id": "format",
+      "name": "Format JSON",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        690,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "command": "=mkdir -p /home/node/.n8n/workflows && echo '{{ $json.jsonContent }}' > {{ $json.filePath }}"
+      },
+      "id": "write",
+      "name": "Write File",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        910,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Manual": {
+      "main": [
+        [
+          {
+            "node": "Get Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Workflow": {
+      "main": [
+        [
+          {
+            "node": "Format JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format JSON": {
+      "main": [
+        [
+          {
+            "node": "Write File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "saveManualExecutions": true,
+    "saveExecutionProgress": true
+  },
+  "staticData": null,
+  "meta": {
+    "templateCredsSetupCompleted": true
+  },
+  "pinData": {},
+  "versionId": "a061ff03-8390-46fb-b9b2-f5638a5991e8",
+  "triggerCount": 0,
+  "shared": [
+    {
+      "createdAt": "2025-07-10T15:14:55.799Z",
+      "updatedAt": "2025-07-10T15:14:55.799Z",
+      "role": "workflow:owner",
+      "workflowId": "g9aalr0NL5mC7TO7",
+      "projectId": "rKJew7g6FK4UIQ0i",
+      "project": {
+        "createdAt": "2025-06-19T03:39:08.393Z",
+        "updatedAt": "2025-06-19T15:35:08.854Z",
+        "id": "rKJew7g6FK4UIQ0i",
+        "name": "Tracy Snell <tjs@databuddies.com>",
+        "type": "personal",
+        "icon": null,
+        "projectRelations": [
+          {
+            "createdAt": "2025-06-19T03:39:08.393Z",
+            "updatedAt": "2025-06-19T03:39:08.393Z",
+            "role": "project:personalOwner",
+            "userId": "220c6c5e-14a8-4e17-9418-2ebaf789fc31",
+            "projectId": "rKJew7g6FK4UIQ0i",
+            "user": {
+              "createdAt": "2025-06-19T03:39:08.393Z",
+              "updatedAt": "2025-07-08T14:00:58.757Z",
+              "id": "220c6c5e-14a8-4e17-9418-2ebaf789fc31",
+              "email": "tjs@databuddies.com",
+              "firstName": "Tracy",
+              "lastName": "Snell",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-06-19T15:35:28.226Z",
+                "personalization_survey_n8n_version": "1.97.1",
+                "automationGoalDevops": [],
+                "companyType": "saas",
+                "role": "it"
+              },
+              "settings": {
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "FxNC9MytwEcBvWvV",
+                "userActivated": true,
+                "userActivatedAt": 1751032834442,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1751983255551
+                }
+              },
+              "role": "global:member",
+              "disabled": false,
+              "mfaEnabled": false,
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": []
+}
