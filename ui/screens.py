@@ -42,8 +42,8 @@ Commands:
 Git Commands:
   g          Show Git status
   c          Commit changes
-  Shift+P    Push to remote
-  Shift+U    Pull from remote
+  s          puSh to remote (git push)
+  f          Fetch from remote (git pull)
   
 Other:
   q          Quit application
@@ -73,8 +73,8 @@ class WorkflowScreen(Screen):
         Binding("r", "refresh", "Refresh", priority=True),
         Binding("g", "git_status", "Git status", priority=True),
         Binding("c", "git_commit", "Commit", priority=True),
-        Binding("shift+p", "git_push", "Push to remote", show=False),
-        Binding("shift+u", "git_pull", "Pull from remote", show=False),
+        Binding("s", "git_push", "puSh git", priority=True),
+        Binding("f", "git_pull", "Fetch git", priority=True),
         Binding("q", "quit", "Quit", priority=True),
         Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("ctrl+q", "quit", "Quit", show=False),

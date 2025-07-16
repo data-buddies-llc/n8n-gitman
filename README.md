@@ -5,7 +5,8 @@ A Python utility with a Textual-based UI for managing n8n workflows in Git repos
 ## Features
 
 - **Multi-environment Support**: Manage workflows across Dev, Staging, and Production n8n instances
-- **Git Integration**: Automatic Git operations with commit tracking
+- **Git Integration**: Full Git support with status tracking, commit, push, and pull operations
+- **GitHub Sync**: Real-time sync status showing ahead/behind commits and uncommitted changes
 - **Textual UI**: Modern terminal user interface with keyboard shortcuts
 - **Workflow Management**: Pull, push, list, and manage workflows
 - **Search & Filter**: Find workflows by name, ID, or tags
@@ -89,40 +90,64 @@ python main.py
 
 ### Keyboard Shortcuts
 
+#### Workflow Operations
 | Shortcut | Action |
 |----------|--------|
-| `Ctrl+L` | List workflows from current environment |
-| `Ctrl+U` | Pull selected workflow |
-| `Ctrl+P` | Push selected workflow |
-| `Ctrl+E` | Switch environment (Dev → Staging → Prod) |
-| `Ctrl+B` | Show branch information |
-| `Ctrl+R` | Refresh workflow list |
-| `Ctrl+Q` | Quit application |
+| `l` | List workflows from current environment |
+| `u` | Pull selected workflow |
+| `p` | Push selected workflow |
+| `e` | Switch environment (Dev → Staging → Prod) |
+| `b` | Show branch information |
+| `r` | Refresh workflow list |
+| `/` | Focus search box |
+| `?` | Show help |
+| `q` | Quit application |
+
+#### Git Operations
+| Shortcut | Action |
+|----------|--------|
+| `g` | Show Git status |
+| `c` | Commit all changes |
+| `s` | Push to remote (git push) |
+| `f` | Fetch/pull from remote (git pull) |
 
 ### Workflow Operations
 
 #### List Workflows
-- Press `Ctrl+L` or click "List" button
+- Press `l` or click "List" button
 - Shows all workflows from the current n8n environment
 - Displays ID, Name, Repository status, Active status, Tags, and Last Modified
 
 #### Pull Workflow
 - Select a workflow from the list
-- Press `Ctrl+U` or click "Pull" button
+- Press `u` or click "Pull" button
 - Downloads workflow from n8n and saves to local repository
 - Automatically generates metadata and README files
 - Commits changes to Git if auto-commit is enabled
 
 #### Push Workflow
 - Select a workflow that exists in the repository
-- Press `Ctrl+P` or click "Push" button
+- Press `p` or click "Push" button
 - Uploads local workflow to n8n
 - Only works for workflows that exist in the local repository
 
 #### Switch Environment
-- Press `Ctrl+E` or click "Switch Env" button
+- Press `e` or click "Switch Env" button
 - Cycles through Dev → Staging → Prod environments
-- Automatically refreshes workflow list
+- Automatically refreshes workflow list and switches Git branch
+
+### Git Operations
+
+#### Git Status Display
+- Real-time Git status shown in the top bar
+- Shows sync status: `✓ Synced`, `↑N` commits ahead, `↓N` commits behind
+- Displays uncommitted changes: staged, modified, untracked files
+
+#### Git Operations
+- Press `g` to show detailed Git status
+- Press `c` to commit all changes with automatic timestamp
+- Press `s` to push commits to GitHub
+- Press `f` to fetch/pull latest changes from GitHub
 
 ### Search and Filter
 
@@ -167,10 +192,22 @@ pytest tests/
 
 ### Code Structure
 
-- `main.py`: Textual UI application
-- `scripts/api.py`: n8n API client with retry logic
-- `scripts/git.py`: Git operations manager
-- `scripts/utils.py`: Utility functions for file handling and README generation
+The application follows a clean architecture pattern:
+
+- `main.py`: Main application entry point
+- `domain/`: Business logic and models
+  - `models.py`: Domain models (Workflow, EnvironmentConfig, etc.)
+  - `services.py`: Business services (ApplicationService, WorkflowService, etc.)
+- `ui/`: User interface components
+  - `screens.py`: Textual screens (WorkflowScreen, HelpScreen)
+  - `components.py`: UI components (WorkflowTable, StatusDisplay, GitStatusDisplay)
+  - `custom_button.py`: Custom button widget
+- `controllers/`: Application controllers
+  - `workflow_controller.py`: Handles user interactions and coordinates services
+- `scripts/`: Core functionality modules
+  - `api.py`: n8n API client with retry logic
+  - `git.py`: Git operations manager with full GitHub integration
+  - `utils.py`: Utility functions for file handling and README generation
 
 ### Adding New Features
 
@@ -194,9 +231,15 @@ pytest tests/
    - Verify file permissions
 
 3. **Workflow Not Found**
-   - Refresh workflow list with `Ctrl+R`
+   - Refresh workflow list with `r`
    - Check if workflow exists in n8n
    - Verify correct environment is selected
+
+4. **Git Push/Pull Issues**
+   - Ensure remote repository is configured: `git remote -v`
+   - Check if you have push permissions
+   - Verify network connectivity to GitHub
+   - Check Git status with `g` key to see sync state
 
 ### Logging
 
