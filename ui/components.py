@@ -6,7 +6,7 @@ from textual.coordinate import Coordinate
 from rich.text import Text
 from typing import List, Optional
 
-from domain.models import Workflow
+from domain.models import Workflow, SyncStatus
 
 
 class WorkflowTable:
@@ -18,7 +18,7 @@ class WorkflowTable:
     
     def setup(self):
         """Initialize the table structure."""
-        self.table.add_columns("ID", "Name", "In Repo", "Active", "Tags", "Modified")
+        self.table.add_columns("ID", "Name", "Sync Status", "Active", "Tags", "Modified")
         self.table.cursor_type = "row"
         self.table.can_focus = True
     
@@ -30,12 +30,12 @@ class WorkflowTable:
         for workflow in workflows:
             active = "✅" if workflow.active else "❌"
             tags = ', '.join(workflow.tags) if workflow.tags else ""
-            in_repo = "✅" if workflow.is_in_repo else "❌"
+            sync_status = self._get_sync_status_display(workflow.sync_status)
             
             self.table.add_row(
                 workflow.id,
                 workflow.name,
-                in_repo,
+                sync_status,
                 active,
                 tags,
                 workflow.formatted_updated_at
@@ -43,6 +43,16 @@ class WorkflowTable:
         
         # Refocus the table after updating
         self.table.focus()
+    
+    def _get_sync_status_display(self, sync_status: SyncStatus) -> str:
+        """Get display string for sync status."""
+        status_map = {
+            SyncStatus.SYNCED: "🟢 Synced",
+            SyncStatus.REMOTE_ONLY: "⬇️ Remote Only", 
+            SyncStatus.LOCAL_ONLY: "⬆️ Local Only",
+            SyncStatus.UNKNOWN: "❓ Unknown"
+        }
+        return status_map.get(sync_status, "❓ Unknown")
     
     def get_selected_workflow(self) -> Optional[Workflow]:
         """Get the currently selected workflow."""

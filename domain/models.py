@@ -7,6 +7,14 @@ from typing import List, Dict, Any, Optional
 from enum import Enum
 
 
+class SyncStatus(Enum):
+    """Sync status between local and remote workflows."""
+    SYNCED = "synced"  # Exists in both n8n and repo
+    REMOTE_ONLY = "remote_only"  # Exists in n8n but not in repo
+    LOCAL_ONLY = "local_only"  # Exists in repo but not in n8n
+    UNKNOWN = "unknown"  # Status unknown
+
+
 class ValidationStatus(Enum):
     VALID = "valid"
     INVALID = "invalid"
@@ -31,6 +39,7 @@ class Workflow:
     created_at: str = ""
     nodes: List[Dict[str, Any]] = None
     connections: Dict[str, Any] = None
+    sync_status: SyncStatus = SyncStatus.UNKNOWN
     
     def __post_init__(self):
         if self.tags is None:

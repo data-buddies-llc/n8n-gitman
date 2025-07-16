@@ -9,7 +9,7 @@ from typing import List, Dict, Any, Optional
 from datetime import datetime
 from dotenv import load_dotenv
 
-from .models import Workflow, WorkflowFilter, EnvironmentConfig, ApplicationState, OperationResult
+from .models import Workflow, WorkflowFilter, EnvironmentConfig, ApplicationState, OperationResult, SyncStatus
 from scripts.api import N8NAPIClient
 from scripts.git import GitManager
 from scripts.utils import save_workflow, find_workflow_file
@@ -26,13 +26,17 @@ class WorkflowService:
         self.workflow_dir = Path(os.getenv('DEFAULT_WORKFLOW_DIR', 'workflows/devops'))
     
     def list_workflows(self) -> OperationResult:
-        """List all workflows from the API."""
+        """List all workflows from the API with sync status."""
         try:
             workflow_data = self.api_client.list_workflows()
-            workflows = [self._create_workflow_from_data(data) for data in workflow_data]
+            remote_workflows = [self._create_workflow_from_data(data) for data in workflow_data]
+            
+            # Get local workflows and merge with remote
+            merged_workflows = self._merge_remote_and_local_workflows(remote_workflows)
+            
             return OperationResult.success_result(
-                f"Listed {len(workflows)} workflows", 
-                workflows
+                f"Listed {len(merged_workflows)} workflows", 
+                merged_workflows
             )
         except Exception as e:
             logger.error(f"Failed to list workflows: {e}")
@@ -133,6 +137,77 @@ class WorkflowService:
             nodes=data.get('nodes', []),
             connections=data.get('connections', {})
         )
+    
+    def _get_local_workflows(self) -> List[Workflow]:
+        """Get all workflows from local repository."""
+        local_workflows = []
+        
+        if not self.workflow_dir.exists():
+            return local_workflows
+        
+        for workflow_path in self.workflow_dir.iterdir():
+            if workflow_path.is_dir():
+                workflow_id = workflow_path.name
+                
+                # Read metadata if available
+                metadata_file = workflow_path / "metadata.json"
+                if metadata_file.exists():
+                    try:
+                        with open(metadata_file, 'r') as f:
+                            metadata = json.load(f)
+                        
+                        workflow = Workflow(
+                            id=workflow_id,
+                            name=metadata.get('name', 'Local Workflow'),
+                            active=metadata.get('active', False),
+                            tags=metadata.get('tags', []),
+                            updated_at=metadata.get('updatedAt', ''),
+                            created_at=metadata.get('createdAt', ''),
+                            sync_status=SyncStatus.LOCAL_ONLY
+                        )
+                        local_workflows.append(workflow)
+                    except Exception as e:
+                        logger.warning(f"Failed to read metadata for {workflow_id}: {e}")
+                        # Create minimal workflow entry
+                        workflow = Workflow(
+                            id=workflow_id,
+                            name=f"Local Workflow ({workflow_id})",
+                            sync_status=SyncStatus.LOCAL_ONLY
+                        )
+                        local_workflows.append(workflow)
+                else:
+                    # Create minimal workflow entry for directories without metadata
+                    workflow = Workflow(
+                        id=workflow_id,
+                        name=f"Local Workflow ({workflow_id})",
+                        sync_status=SyncStatus.LOCAL_ONLY
+                    )
+                    local_workflows.append(workflow)
+        
+        return local_workflows
+    
+    def _merge_remote_and_local_workflows(self, remote_workflows: List[Workflow]) -> List[Workflow]:
+        """Merge remote workflows with local workflows, setting sync status."""
+        local_workflows = self._get_local_workflows()
+        local_workflow_ids = {w.id for w in local_workflows}
+        remote_workflow_ids = {w.id for w in remote_workflows}
+        
+        merged_workflows = []
+        
+        # Add remote workflows with sync status
+        for remote_workflow in remote_workflows:
+            if remote_workflow.id in local_workflow_ids:
+                remote_workflow.sync_status = SyncStatus.SYNCED
+            else:
+                remote_workflow.sync_status = SyncStatus.REMOTE_ONLY
+            merged_workflows.append(remote_workflow)
+        
+        # Add local-only workflows
+        for local_workflow in local_workflows:
+            if local_workflow.id not in remote_workflow_ids:
+                merged_workflows.append(local_workflow)
+        
+        return merged_workflows
 
 
 class EnvironmentService:
