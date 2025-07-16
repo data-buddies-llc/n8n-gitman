@@ -188,3 +188,113 @@ class WorkflowController:
                 
         elif button_id == "btn-branch":
             self.show_branch_info()
+    
+    def show_git_status(self) -> None:
+        """Show detailed Git status."""
+        status = self.app_service.get_git_status()
+        
+        status_parts = []
+        if status['has_remote']:
+            if status['is_synced']:
+                status_parts.append("✓ Repository is synced")
+            else:
+                if status['is_ahead']:
+                    status_parts.append(f"↑ {status['ahead_count']} commits ahead")
+                if status['is_behind']:
+                    status_parts.append(f"↓ {status['behind_count']} commits behind")
+        else:
+            status_parts.append("No remote repository configured")
+        
+        if status['has_uncommitted']:
+            uncommitted = []
+            if status['staged_count']:
+                uncommitted.append(f"{status['staged_count']} staged")
+            if status['modified_count']:
+                uncommitted.append(f"{status['modified_count']} modified")
+            if status['untracked_count']:
+                uncommitted.append(f"{status['untracked_count']} untracked")
+            status_parts.append(f"Local changes: {', '.join(uncommitted)}")
+        
+        message = " | ".join(status_parts) if status_parts else "No Git status available"
+        self.screen.status_display.update_status(message)
+    
+    async def git_commit(self) -> None:
+        """Commit all changes."""
+        self.screen.status_display.update_status("Committing changes...")
+        
+        try:
+            # Get current status
+            status = self.app_service.get_git_status()
+            
+            if not status['has_uncommitted']:
+                self.screen.status_display.update_status("No changes to commit")
+                return
+            
+            # Add all files
+            git_manager = self.app_service.git_manager
+            staged, modified, untracked = git_manager.get_status()
+            
+            all_files = list(set(staged + modified + untracked))
+            if all_files:
+                success = await asyncio.to_thread(git_manager.add_files, all_files)
+                if not success:
+                    self.screen.status_display.update_status("Failed to add files", is_error=True)
+                    return
+            
+            # Create commit
+            timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            commit_message = f"Automated commit - {timestamp}"
+            
+            commit_sha = await asyncio.to_thread(git_manager.commit, commit_message)
+            
+            if commit_sha:
+                self.screen.status_display.update_status(f"Committed changes: {commit_sha[:8]}")
+                # Update git status display
+                self.screen.update_git_status()
+            else:
+                self.screen.status_display.update_status("Failed to create commit", is_error=True)
+                
+        except Exception as e:
+            logger.error(f"Error in git_commit: {e}")
+            self.screen.status_display.update_status(f"Error committing: {str(e)}", is_error=True)
+    
+    async def git_push(self) -> None:
+        """Push to remote repository."""
+        self.screen.status_display.update_status("Pushing to remote...")
+        
+        try:
+            git_manager = self.app_service.git_manager
+            success = await asyncio.to_thread(git_manager.push)
+            
+            if success:
+                self.screen.status_display.update_status("Successfully pushed to remote")
+                # Update git status display
+                self.screen.update_git_status()
+            else:
+                self.screen.status_display.update_status("Failed to push to remote", is_error=True)
+                
+        except Exception as e:
+            logger.error(f"Error in git_push: {e}")
+            self.screen.status_display.update_status(f"Error pushing: {str(e)}", is_error=True)
+    
+    async def git_pull(self) -> None:
+        """Pull from remote repository."""
+        self.screen.status_display.update_status("Pulling from remote...")
+        
+        try:
+            git_manager = self.app_service.git_manager
+            success = await asyncio.to_thread(git_manager.pull)
+            
+            if success:
+                self.screen.status_display.update_status("Successfully pulled from remote")
+                # Update git status display
+                self.screen.update_git_status()
+                # Refresh workflows as they might have changed
+                if self.app_service.api_client:
+                    await self.list_workflows()
+            else:
+                self.screen.status_display.update_status("Failed to pull from remote", is_error=True)
+                
+        except Exception as e:
+            logger.error(f"Error in git_pull: {e}")
+            self.screen.status_display.update_status(f"Error pulling: {str(e)}", is_error=True)

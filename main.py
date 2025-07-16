@@ -38,7 +38,7 @@ class N8NWorkflowManager(App):
     }
     
     #top-container {
-        height: 6;
+        height: 7;
         background: $boost;
         padding: 1;
     }

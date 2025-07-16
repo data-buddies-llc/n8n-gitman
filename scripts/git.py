@@ -300,3 +300,126 @@ class GitManager:
         except Exception as e:
             logger.error(f"Failed to init remote: {e}")
             return False
+    
+    def is_behind_remote(self, remote_name: str = 'origin', branch: Optional[str] = None) -> Tuple[bool, int]:
+        """
+        Check if the local branch is behind the remote.
+        
+        Args:
+            remote_name: Name of the remote
+            branch: Branch to check (uses current branch if None)
+            
+        Returns:
+            Tuple of (is_behind, number_of_commits_behind)
+        """
+        try:
+            if branch is None:
+                branch = self.get_current_branch()
+            
+            remote = self.repo.remote(remote_name)
+            remote.fetch()
+            
+            local_commit = self.repo.head.commit
+            remote_ref = f"{remote_name}/{branch}"
+            
+            if remote_ref not in self.repo.refs:
+                logger.warning(f"Remote ref {remote_ref} not found")
+                return False, 0
+            
+            remote_commit = self.repo.refs[remote_ref].commit
+            
+            # Count commits that are in remote but not in local
+            behind_count = len(list(self.repo.iter_commits(f"{local_commit}..{remote_commit}")))
+            
+            return behind_count > 0, behind_count
+        except Exception as e:
+            logger.error(f"Failed to check if behind remote: {e}")
+            return False, 0
+    
+    def is_ahead_of_remote(self, remote_name: str = 'origin', branch: Optional[str] = None) -> Tuple[bool, int]:
+        """
+        Check if the local branch is ahead of the remote.
+        
+        Args:
+            remote_name: Name of the remote
+            branch: Branch to check (uses current branch if None)
+            
+        Returns:
+            Tuple of (is_ahead, number_of_commits_ahead)
+        """
+        try:
+            if branch is None:
+                branch = self.get_current_branch()
+            
+            remote = self.repo.remote(remote_name)
+            remote.fetch()
+            
+            local_commit = self.repo.head.commit
+            remote_ref = f"{remote_name}/{branch}"
+            
+            if remote_ref not in self.repo.refs:
+                logger.warning(f"Remote ref {remote_ref} not found")
+                return False, 0
+            
+            remote_commit = self.repo.refs[remote_ref].commit
+            
+            # Count commits that are in local but not in remote
+            ahead_count = len(list(self.repo.iter_commits(f"{remote_commit}..{local_commit}")))
+            
+            return ahead_count > 0, ahead_count
+        except Exception as e:
+            logger.error(f"Failed to check if ahead of remote: {e}")
+            return False, 0
+    
+    def get_sync_status(self, remote_name: str = 'origin') -> dict:
+        """
+        Get detailed sync status with the remote repository.
+        
+        Args:
+            remote_name: Name of the remote
+            
+        Returns:
+            Dictionary with sync status information
+        """
+        status = {
+            'has_remote': False,
+            'is_synced': False,
+            'is_ahead': False,
+            'is_behind': False,
+            'ahead_count': 0,
+            'behind_count': 0,
+            'has_uncommitted': False,
+            'untracked_count': 0,
+            'modified_count': 0,
+            'staged_count': 0
+        }
+        
+        try:
+            # Check if remote exists
+            try:
+                remote = self.repo.remote(remote_name)
+                status['has_remote'] = True
+            except ValueError:
+                return status
+            
+            # Check uncommitted changes
+            staged, modified, untracked = self.get_status()
+            status['has_uncommitted'] = bool(staged or modified or untracked)
+            status['staged_count'] = len(staged)
+            status['modified_count'] = len(modified)
+            status['untracked_count'] = len(untracked)
+            
+            # Check sync status
+            is_behind, behind_count = self.is_behind_remote(remote_name)
+            is_ahead, ahead_count = self.is_ahead_of_remote(remote_name)
+            
+            status['is_behind'] = is_behind
+            status['behind_count'] = behind_count
+            status['is_ahead'] = is_ahead
+            status['ahead_count'] = ahead_count
+            status['is_synced'] = not is_behind and not is_ahead and not status['has_uncommitted']
+            
+            return status
+        except Exception as e:
+            logger.error(f"Failed to get sync status: {e}")
+            return status

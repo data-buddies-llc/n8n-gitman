@@ -267,3 +267,7 @@ class ApplicationService:
         branches = self.git_manager.get_branches()
         current = self.git_manager.get_current_branch()
         return f"Current branch: {current} | Available: {', '.join(branches)}"
+    
+    def get_git_status(self) -> dict:
+        """Get Git repository status."""
+        return self.git_manager.get_sync_status()

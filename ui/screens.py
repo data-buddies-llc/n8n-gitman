@@ -9,7 +9,7 @@ from textual.binding import Binding
 from textual.screen import Screen, ModalScreen
 from textual.widgets import DataTable, Input
 
-from .components import WorkflowTable, StatusDisplay, EnvironmentDisplay
+from .components import WorkflowTable, StatusDisplay, EnvironmentDisplay, GitStatusDisplay
 from .custom_button import CustomButton
 
 
@@ -38,6 +38,14 @@ Commands:
   e          Switch environment and branch (if multiple configured)
   b          Show branch information
   r          Refresh workflow list
+  
+Git Commands:
+  g          Show Git status
+  c          Commit changes
+  Shift+P    Push to remote
+  Shift+U    Pull from remote
+  
+Other:
   q          Quit application
   Ctrl+C     Quit application
   Ctrl+Q     Quit application
@@ -63,6 +71,10 @@ class WorkflowScreen(Screen):
         Binding("e", "switch_env", "Env", priority=True),
         Binding("b", "switch_branch", "Branch", priority=True),
         Binding("r", "refresh", "Refresh", priority=True),
+        Binding("g", "git_status", "Git status", priority=True),
+        Binding("c", "git_commit", "Commit", priority=True),
+        Binding("shift+p", "git_push", "Push to remote", show=False),
+        Binding("shift+u", "git_pull", "Pull from remote", show=False),
         Binding("q", "quit", "Quit", priority=True),
         Binding("ctrl+c", "quit", "Quit", show=False),
         Binding("ctrl+q", "quit", "Quit", show=False),
@@ -81,6 +93,7 @@ class WorkflowScreen(Screen):
         self.workflow_table = None
         self.status_display = None
         self.environment_display = None
+        self.git_status_display = None
         
         # Controller reference (will be set by main app)
         self.controller = None
@@ -94,6 +107,7 @@ class WorkflowScreen(Screen):
                     Static("🔄 n8n Workflow Manager", id="title"),
                     Static(f"Environment: {self.app_service.state.current_environment}", id="env-status"),
                     Static(f"Branch: {self.app_service.state.current_branch}", id="branch-status"),
+                    Static("", id="git-status"),
                     Static("", id="status-message"),
                     id="status-bar"
                 ),
@@ -136,6 +150,12 @@ class WorkflowScreen(Screen):
         env_widget = self.query_one("#env-status", Static)
         branch_widget = self.query_one("#branch-status", Static)
         self.environment_display = EnvironmentDisplay(env_widget, branch_widget)
+        
+        git_widget = self.query_one("#git-status", Static)
+        self.git_status_display = GitStatusDisplay(git_widget)
+        
+        # Update git status
+        self.update_git_status()
         
         # Load initial data
         if self.app_service.api_client:
@@ -238,3 +258,32 @@ class WorkflowScreen(Screen):
         """Handle custom button presses."""
         if self.controller:
             await self.controller.handle_button_press(event)
+    
+    def update_git_status(self):
+        """Update the Git status display."""
+        if self.git_status_display:
+            status = self.app_service.get_git_status()
+            self.git_status_display.update_status(status)
+    
+    def action_git_status(self) -> None:
+        """Show Git status."""
+        if self.controller:
+            self.controller.show_git_status()
+    
+    @work(exclusive=True)
+    async def action_git_commit(self) -> None:
+        """Commit changes."""
+        if self.controller:
+            await self.controller.git_commit()
+    
+    @work(exclusive=True)
+    async def action_git_push(self) -> None:
+        """Push to remote."""
+        if self.controller:
+            await self.controller.git_push()
+    
+    @work(exclusive=True)
+    async def action_git_pull(self) -> None:
+        """Pull from remote."""
+        if self.controller:
+            await self.controller.git_pull()

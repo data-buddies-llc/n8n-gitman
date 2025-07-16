@@ -101,3 +101,37 @@ class EnvironmentDisplay:
         """Update both environment and branch displays."""
         self.update_environment(environment)
         self.update_branch(branch)
+
+
+class GitStatusDisplay:
+    """Wrapper for Git status display."""
+    
+    def __init__(self, git_widget: Static):
+        self.git_widget = git_widget
+    
+    def update_status(self, status: dict):
+        """Update Git status display."""
+        parts = []
+        
+        if not status['has_remote']:
+            parts.append("No remote")
+        elif status['is_synced']:
+            parts.append("✓ Synced")
+        else:
+            if status['is_ahead']:
+                parts.append(f"↑{status['ahead_count']}")
+            if status['is_behind']:
+                parts.append(f"↓{status['behind_count']}")
+        
+        if status['has_uncommitted']:
+            uncommitted_parts = []
+            if status['staged_count']:
+                uncommitted_parts.append(f"staged: {status['staged_count']}")
+            if status['modified_count']:
+                uncommitted_parts.append(f"modified: {status['modified_count']}")
+            if status['untracked_count']:
+                uncommitted_parts.append(f"untracked: {status['untracked_count']}")
+            parts.append(f"({', '.join(uncommitted_parts)})")
+        
+        status_text = "Git: " + " ".join(parts) if parts else "Git: Clean"
+        self.git_widget.update(status_text)
