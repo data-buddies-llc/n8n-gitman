@@ -225,6 +225,10 @@ class WorkflowScreen(Screen):
         if self.controller:
             self.controller.show_branch_info()
     
+    def action_quit(self) -> None:
+        """Quit the application."""
+        self.app.exit()
+    
     async def on_button_pressed(self, event: Button.Pressed) -> None:
         """Handle button presses - implementation delegated to controller."""
         if self.controller:

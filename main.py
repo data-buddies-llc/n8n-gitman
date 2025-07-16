@@ -9,6 +9,7 @@ import logging
 from pathlib import Path
 
 from textual.app import App
+from textual.binding import Binding
 
 from domain.services import ApplicationService
 from ui.screens import WorkflowScreen, HelpScreen
@@ -23,6 +24,12 @@ logger = logging.getLogger(__name__)
 
 class N8NWorkflowManager(App):
     """n8n Workflow Manager TUI Application."""
+    
+    BINDINGS = [
+        Binding("q", "quit", "Quit", priority=True),
+        Binding("ctrl+c", "quit", "Quit", show=False),
+        Binding("ctrl+q", "quit", "Quit", show=False),
+    ]
     
     CSS = """
     #app-container {
