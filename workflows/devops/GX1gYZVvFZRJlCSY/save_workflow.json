@@ -1,0 +1,391 @@
+{
+  "createdAt": "2025-07-08T14:53:26.307Z",
+  "updatedAt": "2025-07-09T16:37:44.593Z",
+  "id": "GX1gYZVvFZRJlCSY",
+  "name": "Save Workflow",
+  "active": false,
+  "isArchived": false,
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "e69bb1ab-9080-4a17-b76a-1af63297a2dc",
+      "name": "Manual Trigger",
+      "type": "n8n-nodes-base.manualTrigger",
+      "typeVersion": 1,
+      "position": [
+        -680,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Configuration - Edit these values\nconst config = {\n  workflowName: \"Local LS\", // Name of workflow to export\n  n8nBaseUrl: \"http://localhost:5678\", // Try https:// if this fails\n  includeCredentials: false,\n  addTimestamp: false,\n  exportDirectory: \"/home/node/.n8n/workflows\"\n};\n\nreturn [{ json: { config } }];"
+      },
+      "id": "58bfe905-0541-4a82-ad60-31c2dc743ff4",
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -460,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "command": "mkdir -p /home/node/.n8n/workflows"
+      },
+      "id": "e3dfc836-41a4-4bb3-a61e-74840b98c391",
+      "name": "Create Directory",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -240,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Find target workflow - handle array response from n8n API\nconst config = $node['Config'].json.config;\nconst httpResponse = $input.first().json;\nconst targetName = config.workflowName;\n\n// Handle different response structures\nlet workflows;\nif (Array.isArray(httpResponse)) {\n  workflows = httpResponse;\n  console.log('Got workflow list as array');\n} else if (httpResponse.data && Array.isArray(httpResponse.data)) {\n  workflows = httpResponse.data;\n  console.log('Got workflow list in data property');\n} else {\n  throw new Error('Unexpected response format from workflows API. Expected array, got: ' + typeof httpResponse);\n}\n\nconsole.log(`Searching for \"${targetName}\" among ${workflows.length} workflows`);\n\n// Find matching workflow (case-insensitive)\nconst workflow = workflows.find(w => \n  w.name.toLowerCase() === targetName.toLowerCase()\n);\n\nif (!workflow) {\n  const availableNames = workflows.map(w => w.name).join('\\n  - ');\n  throw new Error(`Workflow \"${targetName}\" not found.\\n\\nAvailable workflows:\\n  - ${availableNames}`);\n}\n\nconsole.log(`✓ Found workflow: \"${workflow.name}\" (ID: ${workflow.id})`);\n\nreturn [{ json: { config, workflowId: workflow.id, workflowName: workflow.name } }];"
+      },
+      "id": "ea31f18d-e288-47d9-926c-edf798fc4926",
+      "name": "Find Workflow",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        200,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$input.first().json.config.n8nBaseUrl}}/api/v1/workflows/{{$input.first().json.workflowId}}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "n8nApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "03b12bca-fba9-4a4f-9ff3-6b7e7488022d",
+      "name": "Get Workflow",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        420,
+        400
+      ],
+      "credentials": {
+        "n8nApi": {
+          "id": "h8HMknFpq7T6zjpC",
+          "name": "n8n account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare export data - comprehensive debugging and handling\nconst config = $node['Config'].json.config;\nconst httpResponse = $input.first().json;\n\n// Extensive debugging to understand the exact structure\nconsole.log('=== DEBUGGING HTTP RESPONSE ===');\nconsole.log('Response type:', typeof httpResponse);\nconsole.log('Is array:', Array.isArray(httpResponse));\nconsole.log('Response keys:', Object.keys(httpResponse || {}));\nconsole.log('Full response structure:', JSON.stringify(httpResponse, null, 2));\nconsole.log('================================');\n\n// Handle the n8n API response which returns an array\nlet workflowData = null;\n\nif (Array.isArray(httpResponse) && httpResponse.length > 0) {\n  workflowData = httpResponse[0];\n  console.log('✓ Extracted workflow from array position 0');\n  console.log('Workflow ID:', workflowData?.id);\n  console.log('Workflow name:', workflowData?.name);\n} else if (httpResponse && httpResponse.data && Array.isArray(httpResponse.data) && httpResponse.data.length > 0) {\n  workflowData = httpResponse.data[0];\n  console.log('✓ Extracted workflow from data array position 0');\n} else if (httpResponse && httpResponse.id) {\n  workflowData = httpResponse;\n  console.log('✓ Using direct response object');\n} else {\n  console.log('❌ Could not extract workflow data');\n  console.log('Response type:', typeof httpResponse);\n  console.log('Response is array:', Array.isArray(httpResponse));\n  console.log('Response length:', Array.isArray(httpResponse) ? httpResponse.length : 'N/A');\n  console.log('Response keys:', Object.keys(httpResponse || {}));\n  throw new Error('Unable to extract workflow data from API response');\n}\n\n// Validate workflow data\nif (!workflowData) {\n  throw new Error('Workflow data is null or undefined');\n}\n\nif (!workflowData.id) {\n  console.log('❌ Workflow data missing ID');\n  console.log('Available fields:', Object.keys(workflowData));\n  console.log('Workflow data:', JSON.stringify(workflowData, null, 2));\n  throw new Error('Workflow data does not contain an ID field');\n}\n\nconsole.log('✓ Successfully extracted workflow:');\nconsole.log('  - Name:', workflowData.name);\nconsole.log('  - ID:', workflowData.id);\nconsole.log('  - Nodes:', workflowData.nodes ? workflowData.nodes.length : 0);\n\n// Create the export object\nconst exportData = {\n  metadata: {\n    exportedAt: new Date().toISOString(),\n    exportedBy: \"n8n-workflow-exporter\",\n    originalId: workflowData.id,\n    originalName: workflowData.name,\n    exportVersion: \"1.0\",\n    versionId: workflowData.versionId || null\n  },\n  workflow: {\n    name: workflowData.name,\n    nodes: workflowData.nodes || [],\n    connections: workflowData.connections || {},\n    active: workflowData.active !== undefined ? workflowData.active : false,\n    settings: workflowData.settings || {},\n    versionId: workflowData.versionId || \"1\",\n    tags: workflowData.tags || [],\n    staticData: workflowData.staticData || null,\n    meta: workflowData.meta || null,\n    pinData: workflowData.pinData || {},\n    triggerCount: workflowData.triggerCount || 0\n  }\n};\n\n// Generate filename\nconst sanitized = workflowData.name.replace(/[^a-zA-Z0-9-_]/g, '_').toLowerCase();\nconst timestamp = config.addTimestamp ? `_${new Date().toISOString().slice(0, 19).replace(/[:.]/g, '-')}` : '';\nconst filename = `${sanitized}${timestamp}.json`;\nconst fullPath = `${config.exportDirectory}/${filename}`; //.replace('~', '$HOME');\n\nconsole.log('✓ Export prepared successfully');\nconsole.log('  - Filename:', filename);\nconsole.log('  - Path:', fullPath);\n\nreturn [{\n  json: {\n    exportData,\n    filename,\n    fullPath,\n    workflowName: workflowData.name,\n    workflowId: workflowData.id,\n    nodeCount: workflowData.nodes ? workflowData.nodes.length : 0,\n    exportSize: JSON.stringify(exportData).length\n  }\n}];"
+      },
+      "id": "2eb29b0d-0818-400b-84d5-dbd5b170f0e4",
+      "name": "Prepare Export",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Prepare file writing with smaller, safer approach\nconst data = $input.first().json;\n\n// Create a smaller JSON string to test first\nconst jsonContent = JSON.stringify(data.exportData, null, 2);\nconst sizeKB = Math.round(jsonContent.length / 1024);\n\nconsole.log('Preparing to write file:');\nconsole.log('- Path:', data.fullPath);\nconsole.log('- Size:', sizeKB, 'KB');\nconsole.log('- Content length:', jsonContent.length, 'characters');\n\n// Split into manageable chunks if too large\nif (jsonContent.length > 50000) {\n  console.log('⚠ Large file detected, this may take a moment...');\n}\n\nreturn [{\n  json: {\n    ...data,\n    jsonContent: jsonContent,\n    sizeKB: sizeKB\n  }\n}];"
+      },
+      "id": "f535faa8-3912-4f5d-b7b3-9133e4070dcf",
+      "name": "Prepare File Content",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        860,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "command": "=cat > \"{{ $input.first().json.fullPath }}\" << 'EOF'\n{{ JSON.stringify($json, null, 2) }}\nEOF\n"
+      },
+      "id": "ce23b0dc-38fc-4c0b-b473-f279a5ae2d8f",
+      "name": "Write File Simple",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        1080,
+        400
+      ],
+      "notesInFlow": true,
+      "notes": "foo"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Pass through data and prepare verification\nconst data = $input.first().json;\nconst previousData = $node['Prepare File Content'].json;\n\nconsole.log('File write completed, preparing verification...');\nconsole.log('Target file:', previousData.fullPath);\n\nreturn [{\n  json: {\n    ...previousData,  // Get all data from the prepare step\n    writeOutput: data.stdout || 'No output',\n    writeError: data.stderr || 'No errors'\n  }\n}];"
+      },
+      "id": "eafc7be6-e2fa-44f4-a6e4-efed78e4f5bc",
+      "name": "Prepare Verification",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -680,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "command": "={{ \"ls -la \\\"\" + $input.first().json.fullPath + \"\\\" && echo \\\"File written successfully\\\"\" }}"
+      },
+      "id": "fbb7ee67-9792-484b-949f-81bc98b6b2e4",
+      "name": "Verify File",
+      "type": "n8n-nodes-base.executeCommand",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Success report with detailed information\nconst data = $input.first().json;\n\nconsole.log('='.repeat(60));\nconsole.log('WORKFLOW EXPORT COMPLETED');\nconsole.log('='.repeat(60));\nconsole.log(`Workflow: ${data.workflowName}`);\nconsole.log(`Workflow ID: ${data.workflowId}`);\nconsole.log(`Node Count: ${data.nodeCount}`);\nconsole.log(`File: ${data.filename}`);\nconsole.log(`Path: ${data.fullPath}`);\nconsole.log(`Size: ${(data.exportSize / 1024).toFixed(2)} KB`);\nconsole.log('-'.repeat(60));\nconsole.log('Export includes:');\nconsole.log('✓ Complete workflow definition');\nconsole.log('✓ All nodes and connections');\nconsole.log('✓ Workflow settings and metadata');\nconsole.log('✓ Static data and pin data');\nconsole.log('✓ Export timestamp and version info');\nconsole.log('='.repeat(60));\n\n// Verify file was created\nconst fileExists = $input.first().json.stdout ? 'File created successfully' : 'File creation status unknown';\nconsole.log(`Status: ${fileExists}`);\n\nreturn [{\n  json: {\n    success: true,\n    message: `Exported \"${data.workflowName}\" (${data.nodeCount} nodes) to ${data.filename}`,\n    details: {\n      workflowName: data.workflowName,\n      workflowId: data.workflowId,\n      nodeCount: data.nodeCount,\n      filename: data.filename,\n      path: data.fullPath,\n      sizeKB: Math.round(data.exportSize / 1024 * 100) / 100,\n      exportedAt: new Date().toISOString()\n    }\n  }\n}];"
+      },
+      "id": "aa043f5e-23eb-48e0-a9cd-bccd9baca2b5",
+      "name": "Report",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -240,
+        660
+      ]
+    },
+    {
+      "parameters": {
+        "url": "={{$node['Config'].json.config.n8nBaseUrl}}/api/v1/workflows",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "n8nApi",
+        "options": {
+          "response": {
+            "response": {
+              "responseFormat": "json"
+            }
+          }
+        }
+      },
+      "id": "db3f349f-c747-487f-bbe5-3c96207c2e42",
+      "name": "List Workflows",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        -20,
+        400
+      ],
+      "credentials": {
+        "n8nApi": {
+          "id": "h8HMknFpq7T6zjpC",
+          "name": "n8n account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Manual Trigger": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Create Directory",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create Directory": {
+      "main": [
+        [
+          {
+            "node": "List Workflows",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Find Workflow": {
+      "main": [
+        [
+          {
+            "node": "Get Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get Workflow": {
+      "main": [
+        [
+          {
+            "node": "Prepare Export",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Export": {
+      "main": [
+        [
+          {
+            "node": "Prepare File Content",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File Content": {
+      "main": [
+        [
+          {
+            "node": "Write File Simple",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare Verification": {
+      "main": [
+        [
+          {
+            "node": "Verify File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify File": {
+      "main": [
+        [
+          {
+            "node": "Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Write File Simple": {
+      "main": [
+        [
+          {
+            "node": "Prepare Verification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "List Workflows": {
+      "main": [
+        [
+          {
+            "node": "Find Workflow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null,
+  "meta": null,
+  "pinData": {},
+  "versionId": "72a18a9b-2614-461f-a271-865c9373da51",
+  "triggerCount": 0,
+  "shared": [
+    {
+      "createdAt": "2025-07-08T14:53:26.307Z",
+      "updatedAt": "2025-07-08T14:53:26.307Z",
+      "role": "workflow:owner",
+      "workflowId": "GX1gYZVvFZRJlCSY",
+      "projectId": "rKJew7g6FK4UIQ0i",
+      "project": {
+        "createdAt": "2025-06-19T03:39:08.393Z",
+        "updatedAt": "2025-06-19T15:35:08.854Z",
+        "id": "rKJew7g6FK4UIQ0i",
+        "name": "Tracy Snell <tjs@databuddies.com>",
+        "type": "personal",
+        "icon": null,
+        "projectRelations": [
+          {
+            "createdAt": "2025-06-19T03:39:08.393Z",
+            "updatedAt": "2025-06-19T03:39:08.393Z",
+            "role": "project:personalOwner",
+            "userId": "220c6c5e-14a8-4e17-9418-2ebaf789fc31",
+            "projectId": "rKJew7g6FK4UIQ0i",
+            "user": {
+              "createdAt": "2025-06-19T03:39:08.393Z",
+              "updatedAt": "2025-07-08T14:00:58.757Z",
+              "id": "220c6c5e-14a8-4e17-9418-2ebaf789fc31",
+              "email": "tjs@databuddies.com",
+              "firstName": "Tracy",
+              "lastName": "Snell",
+              "personalizationAnswers": {
+                "version": "v4",
+                "personalization_survey_submitted_at": "2025-06-19T15:35:28.226Z",
+                "personalization_survey_n8n_version": "1.97.1",
+                "automationGoalDevops": [],
+                "companyType": "saas",
+                "role": "it"
+              },
+              "settings": {
+                "easyAIWorkflowOnboarded": true,
+                "firstSuccessfulWorkflowId": "FxNC9MytwEcBvWvV",
+                "userActivated": true,
+                "userActivatedAt": 1751032834442,
+                "npsSurvey": {
+                  "responded": true,
+                  "lastShownAt": 1751983255551
+                }
+              },
+              "role": "global:member",
+              "disabled": false,
+              "mfaEnabled": false,
+              "isPending": false
+            }
+          }
+        ]
+      }
+    }
+  ],
+  "tags": [
+    {
+      "createdAt": "2025-07-09T15:22:02.997Z",
+      "updatedAt": "2025-07-09T15:22:02.997Z",
+      "id": "fjYnpOdq0Kn9Lpv2",
+      "name": "devops"
+    }
+  ]
+}
